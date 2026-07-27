@@ -20,4 +20,4 @@ fs_monitor_min_saving_gb: 1
 
 # Where fetched per-host reports and the fleet roll-up are written on the
 # control node.
-fs_monitor_fleet_report_dir: "{{ playbook_dir }}/../reports"
+fs_monitor_fleet_report_dir: "{{ playbook_dir }}/reports"
