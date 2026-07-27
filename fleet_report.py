@@ -14,15 +14,15 @@ import argparse
 import datetime as dt
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
 
 from monitor_fs import BYTES_PER_GB, __version__, allow_sigpipe, totals, write_csv
 
 
-def load_reports(paths: Sequence[Path]) -> List[Dict[str, object]]:
+def load_reports(paths: Sequence[Path]) -> list[dict[str, object]]:
     """Read host report files; accepts both the report payload and a bare list."""
-    rows: List[Dict[str, object]] = []
+    rows: list[dict[str, object]] = []
     for path in paths:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -52,8 +52,8 @@ def load_reports(paths: Sequence[Path]) -> List[Dict[str, object]]:
 OUTPUT_NAMES = {"fleet.json", "fleet.csv", "FLEET.md"}
 
 
-def discover(inputs: Sequence[Path]) -> List[Path]:
-    paths: List[Path] = []
+def discover(inputs: Sequence[Path]) -> list[Path]:
+    paths: list[Path] = []
     for item in inputs:
         if item.is_dir():
             paths.extend(
@@ -66,8 +66,8 @@ def discover(inputs: Sequence[Path]) -> List[Path]:
     return paths
 
 
-def by_host(rows: List[Dict[str, object]]) -> List[Dict[str, object]]:
-    grouped: Dict[str, List[Dict[str, object]]] = {}
+def by_host(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    grouped: dict[str, list[dict[str, object]]] = {}
     for row in rows:
         grouped.setdefault(str(row.get("host", "unknown")), []).append(row)
 
@@ -80,7 +80,7 @@ def by_host(rows: List[Dict[str, object]]) -> List[Dict[str, object]]:
     return hosts
 
 
-def print_fleet(rows: List[Dict[str, object]], hosts: List[Dict[str, object]], currency: str, top: int) -> None:
+def print_fleet(rows: list[dict[str, object]], hosts: list[dict[str, object]], currency: str, top: int) -> None:
     summary = totals(rows)
     print(f"Fleet storage report - {summary['hosts']} hosts, {summary['filesystems']} filesystems")
     print("=" * 78)
@@ -88,7 +88,10 @@ def print_fleet(rows: List[Dict[str, object]], hosts: List[Dict[str, object]], c
     print(f"Actually used: {summary['used_gb']:>11,.1f} GB")
     print(f"Reclaimable : {summary['reclaimable_gb']:>12,.1f} GB")
     print(f"Spend       : {summary['monthly_cost']:>12,.2f} {currency}/mo")
-    print(f"Saving      : {summary['monthly_saving']:>12,.2f} {currency}/mo  ({summary['annual_saving']:,.2f} {currency}/yr)")
+    print(
+        f"Saving      : {summary['monthly_saving']:>12,.2f} {currency}/mo  "
+        f"({summary['annual_saving']:,.2f} {currency}/yr)"
+    )
     print()
 
     print(f"{'Host':<28} {'FS':>4} {'Prov(GB)':>10} {'Reclaim(GB)':>12} {'Save/mo':>10}")
@@ -114,7 +117,7 @@ def print_fleet(rows: List[Dict[str, object]], hosts: List[Dict[str, object]], c
             )
 
 
-def render_markdown(rows: List[Dict[str, object]], hosts: List[Dict[str, object]], currency: str, top: int) -> str:
+def render_markdown(rows: list[dict[str, object]], hosts: list[dict[str, object]], currency: str, top: int) -> str:
     summary = totals(rows)
     generated = dt.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
     lines = [
@@ -132,7 +135,8 @@ def render_markdown(rows: List[Dict[str, object]], hosts: List[Dict[str, object]
         f"| Over-provisioned filesystems | {summary['oversized']} |",
         f"| Reclaimable | {summary['reclaimable_gb']:,.1f} GB |",
         f"| Current spend | {summary['monthly_cost']:,.2f} {currency}/mo |",
-        f"| **Potential saving** | **{summary['monthly_saving']:,.2f} {currency}/mo ({summary['annual_saving']:,.2f} {currency}/yr)** |",
+        f"| **Potential saving** | **{summary['monthly_saving']:,.2f} {currency}/mo "
+        f"({summary['annual_saving']:,.2f} {currency}/yr)** |",
         "",
         "## Savings by host",
         "",
@@ -171,7 +175,7 @@ def render_markdown(rows: List[Dict[str, object]], hosts: List[Dict[str, object]
     return "\n".join(lines)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     allow_sigpipe()
     parser = argparse.ArgumentParser(
         description="Merge per-host monitor_fs reports into a fleet-wide storage cost report",

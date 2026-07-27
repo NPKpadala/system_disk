@@ -16,6 +16,7 @@ priorities so it never competes with the workload it is measuring.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import ctypes
 import datetime as dt
@@ -27,9 +28,9 @@ import signal
 import socket
 import sys
 import time
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 __version__ = "2.0.0"
 
@@ -95,13 +96,13 @@ class DiskStats:
 # --------------------------------------------------------------------------
 
 
-def lower_priority(nice_level: int = 10) -> Dict[str, object]:
+def lower_priority(nice_level: int = 10) -> dict[str, object]:
     """Drop CPU and I/O priority so collection cannot disturb the workload.
 
     Returns a dict describing what was applied; failures are non-fatal because
     the collector must never take a host down with it.
     """
-    applied: Dict[str, object] = {"nice": None, "ionice": False}
+    applied: dict[str, object] = {"nice": None, "ionice": False}
     try:
         os.nice(nice_level)
         applied["nice"] = os.nice(0)
@@ -119,7 +120,7 @@ def lower_priority(nice_level: int = 10) -> Dict[str, object]:
     return applied
 
 
-def load_average() -> Optional[List[float]]:
+def load_average() -> list[float] | None:
     try:
         return [round(value, 2) for value in os.getloadavg()]
     except (OSError, AttributeError):
@@ -131,10 +132,10 @@ def load_average() -> Optional[List[float]]:
 # --------------------------------------------------------------------------
 
 
-def parse_mounts(mounts_path: str = "/proc/mounts") -> List[MountInfo]:
-    mounts: List[MountInfo] = []
+def parse_mounts(mounts_path: str = "/proc/mounts") -> list[MountInfo]:
+    mounts: list[MountInfo] = []
     seen: set = set()
-    with open(mounts_path, "r", encoding="utf-8") as handle:
+    with open(mounts_path, encoding="utf-8") as handle:
         for line in handle:
             parts = line.split()
             if len(parts) < 3:
@@ -148,16 +149,16 @@ def parse_mounts(mounts_path: str = "/proc/mounts") -> List[MountInfo]:
     return mounts
 
 
-def resolve_device_name(device: str) -> Optional[str]:
+def resolve_device_name(device: str) -> str | None:
     """Map a device path to the kernel name used in /proc/diskstats."""
     if not device.startswith("/dev/"):
         return None
     return os.path.basename(os.path.realpath(device))
 
 
-def read_diskstats(diskstats_path: str = "/proc/diskstats") -> Dict[str, DiskStats]:
-    stats: Dict[str, DiskStats] = {}
-    with open(diskstats_path, "r", encoding="utf-8") as handle:
+def read_diskstats(diskstats_path: str = "/proc/diskstats") -> dict[str, DiskStats]:
+    stats: dict[str, DiskStats] = {}
+    with open(diskstats_path, encoding="utf-8") as handle:
         for line in handle:
             parts = line.split()
             if len(parts) < 14:
@@ -172,13 +173,13 @@ def read_diskstats(diskstats_path: str = "/proc/diskstats") -> Dict[str, DiskSta
     return stats
 
 
-def disk_usage_bytes(mount_point: str) -> Tuple[int, int, int, float]:
+def disk_usage_bytes(mount_point: str) -> tuple[int, int, int, float]:
     usage = shutil.disk_usage(mount_point)
     used_percent = (usage.used / usage.total) * 100 if usage.total else 0.0
     return usage.total, usage.used, usage.free, used_percent
 
 
-def _match_mount(path: str, mount_points: Sequence[str]) -> Optional[str]:
+def _match_mount(path: str, mount_points: Sequence[str]) -> str | None:
     """Return the longest mount point that contains ``path``."""
     for mount_point in mount_points:
         if path == mount_point or path.startswith(mount_point.rstrip(os.sep) + os.sep):
@@ -186,7 +187,7 @@ def _match_mount(path: str, mount_points: Sequence[str]) -> Optional[str]:
     return None
 
 
-def scan_open_files(mount_points: Iterable[str]) -> Dict[str, bool]:
+def scan_open_files(mount_points: Iterable[str]) -> dict[str, bool]:
     """Report which mount points have a process holding something open.
 
     One pass over /proc covers every mount point at once, instead of shelling
@@ -194,7 +195,7 @@ def scan_open_files(mount_points: Iterable[str]) -> Dict[str, bool]:
     monitored filesystems that is one walk rather than twelve fork/exec cycles.
     """
     ordered = sorted({os.path.normpath(m) for m in mount_points}, key=len, reverse=True)
-    result = {mount_point: False for mount_point in ordered}
+    result = dict.fromkeys(ordered, False)
     if not ordered:
         return result
 
@@ -205,12 +206,10 @@ def scan_open_files(mount_points: Iterable[str]) -> Dict[str, bool]:
         if not pid.isdigit() or pid == self_pid or not remaining:
             continue
         proc_path = Path("/proc") / pid
-        candidates: List[Path] = [proc_path / "cwd", proc_path / "root", proc_path / "exe"]
+        candidates: list[Path] = [proc_path / "cwd", proc_path / "root", proc_path / "exe"]
         fd_path = proc_path / "fd"
-        try:
+        with contextlib.suppress(OSError):
             candidates.extend(fd_path / fd for fd in os.listdir(fd_path))
-        except OSError:
-            pass
 
         for link in candidates:
             try:
@@ -229,13 +228,13 @@ def scan_open_files(mount_points: Iterable[str]) -> Dict[str, bool]:
 def list_target_mounts(
     exclude_mounts: Iterable[str],
     exclude_types: Iterable[str],
-    include_mounts: Optional[Iterable[str]] = None,
-) -> List[MountInfo]:
+    include_mounts: Iterable[str] | None = None,
+) -> list[MountInfo]:
     excluded_mounts = {os.path.normpath(mount) for mount in exclude_mounts}
     excluded_types = set(exclude_types)
     included = {os.path.normpath(mount) for mount in include_mounts or []}
 
-    mounts: List[MountInfo] = []
+    mounts: list[MountInfo] = []
     for mount in parse_mounts():
         normalized = os.path.normpath(mount.mount_point)
         if included:
@@ -248,7 +247,7 @@ def list_target_mounts(
     return mounts
 
 
-def load_state(state_path: Path) -> Dict[str, Dict[str, int]]:
+def load_state(state_path: Path) -> dict[str, dict[str, int]]:
     if not state_path.exists():
         return {}
     try:
@@ -258,7 +257,7 @@ def load_state(state_path: Path) -> Dict[str, Dict[str, int]]:
     return data if isinstance(data, dict) else {}
 
 
-def save_state(state_path: Path, state: Dict[str, Dict[str, int]]) -> None:
+def save_state(state_path: Path, state: dict[str, dict[str, int]]) -> None:
     state_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
     tmp_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -270,11 +269,11 @@ def collect(
     exclude_mounts: Iterable[str],
     exclude_types: Iterable[str],
     activity_threshold_sectors: int,
-    include_mounts: Optional[Iterable[str]] = None,
+    include_mounts: Iterable[str] | None = None,
     skip_open_files: bool = False,
     retention_days: int = 400,
-    host: Optional[str] = None,
-) -> Dict[str, object]:
+    host: str | None = None,
+) -> dict[str, object]:
     started = time.monotonic()
     mounts = list_target_mounts(exclude_mounts, exclude_types, include_mounts)
     diskstats = read_diskstats()
@@ -287,12 +286,12 @@ def collect(
     daily_dir.mkdir(parents=True, exist_ok=True)
 
     if skip_open_files:
-        open_files_map: Dict[str, bool] = {}
+        open_files_map: dict[str, bool] = {}
     else:
         open_files_map = scan_open_files(mount.mount_point for mount in mounts)
 
-    results: List[Dict[str, object]] = []
-    new_state: Dict[str, Dict[str, int]] = {}
+    results: list[dict[str, object]] = []
+    new_state: dict[str, dict[str, int]] = {}
 
     for mount in mounts:
         try:
@@ -304,9 +303,9 @@ def collect(
         device_name = resolve_device_name(mount.device)
         read_sectors = 0
         write_sectors = 0
-        delta_read: Optional[int] = None
-        delta_write: Optional[int] = None
-        active_io: Optional[bool] = None
+        delta_read: int | None = None
+        delta_write: int | None = None
+        active_io: bool | None = None
 
         if device_name and device_name in diskstats:
             current = diskstats[device_name]
@@ -392,11 +391,11 @@ def prune_daily_files(daily_dir: Path, retention_days: int) -> int:
 # --------------------------------------------------------------------------
 
 
-def load_daily_files(daily_dir: Path, days: int) -> List[Dict[str, object]]:
+def load_daily_files(daily_dir: Path, days: int) -> list[dict[str, object]]:
     if not daily_dir.exists():
         return []
     cutoff = dt.date.today() - dt.timedelta(days=days)
-    records: List[Dict[str, object]] = []
+    records: list[dict[str, object]] = []
     for path in sorted(daily_dir.glob("*.json")):
         try:
             file_date = dt.date.fromisoformat(path.stem)
@@ -427,7 +426,7 @@ def recommend(
     shrink_below_percent: float,
     headroom_percent: float,
     min_saving_gb: float,
-) -> Tuple[str, int, float, str]:
+) -> tuple[str, int, float, str]:
     """Turn a verdict into an action, the bytes it frees and the money it saves."""
     if status == STATUS_UNKNOWN:
         return ACTION_WAIT, 0, 0.0, "Not enough observation days yet"
@@ -460,20 +459,20 @@ def recommend(
 
 
 def aggregate(
-    records: List[Dict[str, object]],
+    records: list[dict[str, object]],
     growth_threshold_bytes: int = 0,
     min_days: int = 7,
     cost_per_gb_month: float = 0.08,
     shrink_below_percent: float = 40.0,
     headroom_percent: float = 30.0,
     min_saving_gb: float = 1.0,
-) -> List[Dict[str, object]]:
-    by_key: Dict[Tuple[str, str], List[Dict[str, object]]] = {}
+) -> list[dict[str, object]]:
+    by_key: dict[tuple[str, str], list[dict[str, object]]] = {}
     for record in records:
         key = (str(record.get("host", "")), str(record.get("mount_point")))
         by_key.setdefault(key, []).append(record)
 
-    summary: List[Dict[str, object]] = []
+    summary: list[dict[str, object]] = []
     for (host, mount_point), items in by_key.items():
         items_sorted = sorted(items, key=lambda item: str(item.get("date")))
         used_values = [int(item.get("used_bytes", 0) or 0) for item in items_sorted]
@@ -535,7 +534,7 @@ def aggregate(
     return summary
 
 
-def totals(rows: List[Dict[str, object]]) -> Dict[str, object]:
+def totals(rows: list[dict[str, object]]) -> dict[str, object]:
     return {
         "hosts": len({str(row.get("host", "")) for row in rows}),
         "filesystems": len(rows),
@@ -550,7 +549,7 @@ def totals(rows: List[Dict[str, object]]) -> Dict[str, object]:
     }
 
 
-def write_csv(path: Path, rows: List[Dict[str, object]]) -> None:
+def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
     if not rows:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -560,7 +559,7 @@ def write_csv(path: Path, rows: List[Dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
-def write_json(path: Path, rows: List[Dict[str, object]], summary: Dict[str, object]) -> None:
+def write_json(path: Path, rows: list[dict[str, object]], summary: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -575,7 +574,7 @@ def human_gb(num_bytes: object) -> str:
     return f"{int(num_bytes or 0) / BYTES_PER_GB:,.1f}"
 
 
-def print_report(rows: List[Dict[str, object]], currency: str = "USD") -> None:
+def print_report(rows: list[dict[str, object]], currency: str = "USD") -> None:
     if not rows:
         print("No data available for report. Run 'collect' for at least a few days first.")
         return
@@ -659,14 +658,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     report_parser = subparsers.add_parser("report", help="Generate an activity and cost report")
     report_parser.add_argument("--days", type=int, default=30, help="Observation window")
-    report_parser.add_argument("--min-days", type=int, default=7, help="Days of data required before judging a filesystem")
+    report_parser.add_argument(
+        "--min-days", type=int, default=7, help="Days of data required before judging a filesystem"
+    )
     report_parser.add_argument(
         "--growth-threshold-bytes",
         type=int,
         default=0,
         help="Growth allowed while still counting as inactive",
     )
-    report_parser.add_argument("--cost-per-gb-month", type=float, default=0.08, help="Blended storage price per GB-month")
+    report_parser.add_argument(
+        "--cost-per-gb-month", type=float, default=0.08, help="Blended storage price per GB-month"
+    )
     report_parser.add_argument("--currency", default="USD", help="Currency label for the report")
     report_parser.add_argument(
         "--shrink-below-percent",
@@ -674,7 +677,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=40.0,
         help="Active filesystems under this fill level are shrink candidates",
     )
-    report_parser.add_argument("--headroom-percent", type=float, default=30.0, help="Headroom kept when proposing a shrink")
+    report_parser.add_argument(
+        "--headroom-percent", type=float, default=30.0, help="Headroom kept when proposing a shrink"
+    )
     report_parser.add_argument("--min-saving-gb", type=float, default=1.0, help="Ignore savings smaller than this")
     report_parser.add_argument("--csv", type=Path, help="Write CSV report")
     report_parser.add_argument("--json", type=Path, help="Write JSON report")
@@ -692,7 +697,7 @@ def allow_sigpipe() -> None:
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     allow_sigpipe()
     parser = build_parser()
     args = parser.parse_args(argv)

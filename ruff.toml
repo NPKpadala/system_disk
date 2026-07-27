@@ -1,0 +1,24 @@
+# Lint rules are declared explicitly rather than inherited from whatever ruff
+# version CI happens to install. Leaving them implicit meant a new ruff release
+# could turn a green build red without a line of code changing - which is
+# exactly what happened once already.
+line-length = 120
+target-version = "py39"
+
+exclude = ["demo", "local-data", "ci-data"]
+
+[lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplifications
+    "UP",   # pyupgrade
+]
+
+[lint.per-file-ignores]
+# Tests reach into a private helper on purpose to pin mount-matching behaviour.
+"tests/*" = ["SLF001"]

@@ -258,7 +258,7 @@ batch-01.example.com fs_monitor_exclude_mounts='["/mnt/regulatory-archive"]'
 
 ```bash
 make test     # 26 unit tests, no network, no fixtures to maintain
-make lint     # ruff + ansible-lint (clean at ansible-lint's production profile)
+make lint     # ruff + ansible-lint (pinned versions, explicit rule set)
 make syntax   # playbook syntax check
 ```
 

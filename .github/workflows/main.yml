@@ -65,7 +65,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Ruff
-        run: ruff check --line-length 120 .
+        run: ruff check .
 
       - name: Ansible lint
         run: ansible-lint ansible/
