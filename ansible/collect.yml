@@ -1,0 +1,51 @@
+---
+# Pull every host's findings back to the control node and build one fleet report.
+#
+#   ansible-playbook collect.yml                      # report from existing history
+#   ansible-playbook collect.yml -e run_collect=true  # take a fresh sample first
+#   ansible-playbook collect.yml -l db -e show_hosts=true
+#
+- name: Gather per-host storage reports
+  hosts: "{{ target | default('all') }}"
+  become: true
+  gather_facts: true
+  serial: "{{ batch | default('100%') }}"
+  # One unreachable host must not cost us the other 499 reports.
+  ignore_unreachable: true
+  any_errors_fatal: false
+
+  tasks:
+    - name: Generate and fetch the host report
+      ansible.builtin.import_role:
+        name: fs_monitor
+        tasks_from: report.yml
+
+- name: Build the fleet roll-up
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+
+  tasks:
+    - name: Merge host reports into a fleet report
+      ansible.builtin.command:
+        cmd: >-
+          {{ ansible_playbook_python }} {{ playbook_dir }}/../fleet_report.py
+          {{ fs_monitor_fleet_report_dir }}
+          --currency {{ fs_monitor_currency | quote }}
+          --markdown {{ fs_monitor_fleet_report_dir }}/FLEET.md
+          --csv {{ fs_monitor_fleet_report_dir }}/fleet.csv
+          --json {{ fs_monitor_fleet_report_dir }}/fleet.json
+      register: fleet_summary
+      changed_when: true
+
+    - name: Fleet summary
+      ansible.builtin.debug:
+        var: fleet_summary.stdout_lines
+
+    - name: Where to find the reports
+      ansible.builtin.debug:
+        msg: >-
+          Markdown: {{ fs_monitor_fleet_report_dir }}/FLEET.md |
+          CSV: {{ fs_monitor_fleet_report_dir }}/fleet.csv |
+          JSON: {{ fs_monitor_fleet_report_dir }}/fleet.json

@@ -1,0 +1,34 @@
+---
+# Produce a host report and bring it back to the control node.
+# Imported by collect.yml so that role defaults, inventory overrides and the
+# computed argument strings all resolve with the normal precedence rules.
+
+- name: Take a fresh sample
+  when: run_collect | default(false) | bool
+  ansible.builtin.command:
+    cmd: "{{ fs_monitor_bin_path }} {{ fs_monitor_collect_args }}"
+  changed_when: true
+
+- name: Generate the host report
+  ansible.builtin.command:
+    cmd: >-
+      {{ fs_monitor_bin_path }} {{ fs_monitor_report_args }}
+      --json {{ fs_monitor_report_tmp }}
+  register: fs_monitor_report
+  changed_when: false
+
+- name: Show the host report
+  when: show_hosts | default(false) | bool
+  ansible.builtin.debug:
+    var: fs_monitor_report.stdout_lines
+
+- name: Fetch the host report to the control node
+  ansible.builtin.fetch:
+    src: "{{ fs_monitor_report_tmp }}"
+    dest: "{{ fs_monitor_fleet_report_dir }}/{{ inventory_hostname }}.json"
+    flat: true
+
+- name: Remove the temporary report
+  ansible.builtin.file:
+    path: "{{ fs_monitor_report_tmp }}"
+    state: absent

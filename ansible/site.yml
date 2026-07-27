@@ -1,0 +1,38 @@
+---
+# Roll the collector out to the whole fleet.
+#
+#   ansible-playbook site.yml                  # every host in the inventory
+#   ansible-playbook site.yml -l db            # one group
+#   ansible-playbook site.yml --check --diff   # dry run, changes nothing
+#
+- name: Deploy filesystem activity monitoring
+  hosts: "{{ target | default('all') }}"
+  become: true
+  # Roll out in waves so a bad change never lands everywhere at once.
+  serial: "{{ batch | default('100%') }}"
+  max_fail_percentage: 10
+  gather_facts: true
+
+  roles:
+    - role: fs_monitor
+
+  post_tasks:
+    # Verified with systemctl rather than the module that just set it, so the
+    # check is independent of the task that made the change.
+    - name: Confirm the schedule is armed  # noqa: command-instead-of-module
+      when: ansible_facts['service_mgr'] == 'systemd'
+      ansible.builtin.command: systemctl is-enabled fs-monitor.timer
+      register: fs_monitor_timer_state
+      changed_when: false
+      failed_when: fs_monitor_timer_state.rc != 0
+
+    - name: Report install result
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: collector at {{ fs_monitor_bin_path }},
+          data in {{ fs_monitor_data_dir }},
+          schedule {{ 'not managed here'
+                      if not fs_monitor_manage_schedule | bool
+                      else ('systemd timer ' ~ fs_monitor_schedule
+                            if ansible_facts['service_mgr'] == 'systemd'
+                            else 'cron ' ~ fs_monitor_cron_minute ~ ' ' ~ fs_monitor_cron_hour) }}

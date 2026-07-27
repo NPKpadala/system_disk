@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  role_name: fs_monitor
+  author: NPKpadala
+  description: >-
+    Agentless filesystem activity and storage-cost monitoring: installs a
+    low-overhead collector plus a daily systemd timer (or cron) on Linux hosts.
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: EL
+      versions: ["8", "9"]
+    - name: Ubuntu
+      versions: ["focal", "jammy", "noble"]
+    - name: Debian
+      versions: ["bullseye", "bookworm"]
+  galaxy_tags:
+    - storage
+    - monitoring
+    - finops
+    - linux
+dependencies: []

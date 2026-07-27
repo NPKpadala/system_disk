@@ -1,0 +1,31 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Filesystem activity and storage cost collection
+Documentation=https://github.com/NPKpadala/system_disk
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart={{ fs_monitor_bin_path }} {{ fs_monitor_collect_args }}
+TimeoutStartSec={{ fs_monitor_timeout_sec }}
+
+# Stay out of the workload's way: low CPU priority, idle I/O class, and hard
+# ceilings enforced by the kernel rather than trusted to the script.
+Nice={{ fs_monitor_nice }}
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+CPUQuota={{ fs_monitor_cpu_quota }}
+MemoryMax={{ fs_monitor_memory_max }}
+
+# Hardening. PrivateTmp must stay off: a private /tmp would hide the very
+# filesystems we are asked to measure.
+NoNewPrivileges=true
+PrivateTmp=false
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictRealtime=true
+ReadWritePaths={{ fs_monitor_data_dir }}
+
+[Install]
+WantedBy=multi-user.target

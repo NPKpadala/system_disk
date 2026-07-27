@@ -1,0 +1,16 @@
+---
+# Remove the collector from the fleet.
+#
+#   ansible-playbook uninstall.yml
+#   ansible-playbook uninstall.yml -e fs_monitor_purge_data=true
+#
+- name: Remove filesystem activity monitoring
+  hosts: "{{ target | default('all') }}"
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Uninstall collector, schedule and units
+      ansible.builtin.import_role:
+        name: fs_monitor
+        tasks_from: uninstall.yml

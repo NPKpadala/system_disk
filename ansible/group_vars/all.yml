@@ -1,0 +1,23 @@
+---
+# Fleet-wide defaults. Override per group or per host in the inventory.
+#
+# The cost model is the only thing you really need to tune: put your blended
+# price per provisioned GB-month here (EBS gp3 list is ~0.08 USD, Azure managed
+# premium and on-prem SAN chargeback are usually higher) and every report is
+# denominated in money instead of gigabytes.
+fs_monitor_cost_per_gb_month: 0.08
+fs_monitor_currency: USD
+
+# Judgement window. 30 days of evidence, and nothing is judged before 7.
+fs_monitor_report_days: 30
+fs_monitor_min_days: 7
+
+# An active filesystem under 40% full is a resize candidate; proposals keep
+# 30% headroom above current usage.
+fs_monitor_shrink_below_percent: 40
+fs_monitor_headroom_percent: 30
+fs_monitor_min_saving_gb: 1
+
+# Where fetched per-host reports and the fleet roll-up are written on the
+# control node.
+fs_monitor_fleet_report_dir: "{{ playbook_dir }}/../reports"

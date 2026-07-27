@@ -1,0 +1,98 @@
+---
+- name: Verify the target can run the collector
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['system'] | lower == 'linux'
+      - ansible_facts['python']['version']['major'] == 3
+    fail_msg: >-
+      fs_monitor needs Linux with Python 3 (found
+      {{ ansible_facts['system'] }} / python {{ ansible_facts['python_version'] | default('unknown') }}).
+    quiet: true
+
+- name: Create data directory
+  ansible.builtin.file:
+    path: "{{ fs_monitor_data_dir }}/daily"
+    state: directory
+    owner: "{{ fs_monitor_owner }}"
+    group: "{{ fs_monitor_group }}"
+    mode: "0750"
+
+- name: Install collector
+  ansible.builtin.copy:
+    # Repo root, resolved from the role rather than the playbook, so the role
+    # keeps working when it is imported from somewhere else.
+    src: "{{ role_path }}/../../../monitor_fs.py"
+    dest: "{{ fs_monitor_bin_path }}"
+    owner: "{{ fs_monitor_owner }}"
+    group: "{{ fs_monitor_group }}"
+    mode: "0755"
+  notify: Restart fs-monitor timer
+
+- name: Look for crontab on non-systemd hosts
+  when:
+    - fs_monitor_manage_schedule | bool
+    - ansible_facts['service_mgr'] != 'systemd'
+  ansible.builtin.stat:
+    path: /usr/bin/crontab
+  register: fs_monitor_crontab
+
+- name: Fail early when there is nothing to schedule with
+  when:
+    - fs_monitor_manage_schedule | bool
+    - ansible_facts['service_mgr'] != 'systemd'
+  ansible.builtin.assert:
+    that: fs_monitor_crontab.stat.exists
+    fail_msg: >-
+      {{ inventory_hostname }} has neither systemd nor cron. Install cron, or set
+      fs_monitor_manage_schedule=false and trigger '{{ fs_monitor_bin_path }} collect'
+      from your existing scheduler.
+    quiet: true
+
+- name: Install systemd unit and timer
+  when:
+    - fs_monitor_manage_schedule | bool
+    - ansible_facts['service_mgr'] == 'systemd'
+  block:
+    - name: Template systemd service
+      ansible.builtin.template:
+        src: fs-monitor.service.j2
+        dest: /etc/systemd/system/fs-monitor.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart fs-monitor timer
+
+    - name: Template systemd timer
+      ansible.builtin.template:
+        src: fs-monitor.timer.j2
+        dest: /etc/systemd/system/fs-monitor.timer
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart fs-monitor timer
+
+    - name: Enable daily collection timer
+      ansible.builtin.systemd_service:
+        name: fs-monitor.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+- name: Schedule collection with cron on non-systemd hosts
+  when:
+    - fs_monitor_manage_schedule | bool
+    - ansible_facts['service_mgr'] != 'systemd'
+  ansible.builtin.cron:
+    name: fs-monitor daily collection
+    hour: "{{ fs_monitor_cron_hour }}"
+    minute: "{{ fs_monitor_cron_minute }}"
+    user: "{{ fs_monitor_owner }}"
+    job: "{{ fs_monitor_bin_path }} {{ fs_monitor_collect_args }}"
+    cron_file: fs-monitor
+
+- name: Seed a baseline reading
+  when: fs_monitor_seed_baseline | bool
+  ansible.builtin.command:
+    cmd: "{{ fs_monitor_bin_path }} {{ fs_monitor_collect_args }}"
+    creates: "{{ fs_monitor_data_dir }}/state.json"
+  changed_when: true

@@ -1,0 +1,26 @@
+---
+fs_monitor_bin_path: "{{ fs_monitor_bin_dir }}/{{ fs_monitor_bin_name }}"
+
+# Options that apply to every invocation (they must precede the subcommand).
+fs_monitor_common_args: >-
+  --data-dir {{ fs_monitor_data_dir | quote }}
+  {% for mount in fs_monitor_include_mounts %}--include-mount {{ mount | quote }} {% endfor %}
+  {% for mount in fs_monitor_exclude_mounts %}--exclude-mount {{ mount | quote }} {% endfor %}
+  {% for fstype in fs_monitor_exclude_types %}--exclude-type {{ fstype | quote }} {% endfor %}
+
+fs_monitor_collect_args: >-
+  {{ fs_monitor_common_args }} collect
+  --activity-threshold-sectors {{ fs_monitor_activity_threshold_sectors }}
+  --retention-days {{ fs_monitor_retention_days }}
+  --nice {{ fs_monitor_nice }}
+  {% if fs_monitor_skip_open_files %}--skip-open-files {% endif %}--quiet
+
+fs_monitor_report_args: >-
+  {{ fs_monitor_common_args }} report
+  --days {{ fs_monitor_report_days }}
+  --min-days {{ fs_monitor_min_days }}
+  --cost-per-gb-month {{ fs_monitor_cost_per_gb_month }}
+  --currency {{ fs_monitor_currency | quote }}
+  --shrink-below-percent {{ fs_monitor_shrink_below_percent }}
+  --headroom-percent {{ fs_monitor_headroom_percent }}
+  --min-saving-gb {{ fs_monitor_min_saving_gb }}
