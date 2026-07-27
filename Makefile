@@ -16,7 +16,7 @@ test: ## Run the unit tests
 
 .PHONY: lint
 lint: ## Lint Python and Ansible
-	ruff check --line-length 120 .
+	ruff check .
 	ansible-lint $(ANSIBLE_DIR)/
 
 .PHONY: syntax

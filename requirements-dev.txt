@@ -1,6 +1,13 @@
 # Control-node / CI tooling only.
 # The collector that runs on monitored hosts uses the Python 3 standard library
 # and nothing else - that is deliberate, so it can be dropped onto any Linux box.
+
+# ansible-core is deliberately unpinned: CI proving the role works against the
+# newest release is the point, and ansible.cfg no longer names plugins that
+# come and go between versions.
 ansible-core>=2.14
-ansible-lint>=6.20
-ruff>=0.4
+
+# The linters are pinned. They gate the build, so an upstream release that adds
+# rules must be an explicit upgrade here rather than a red build one morning.
+ansible-lint~=26.6
+ruff~=0.15.8

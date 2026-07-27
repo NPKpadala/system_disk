@@ -16,7 +16,6 @@ import datetime as dt
 import json
 import random
 from pathlib import Path
-from typing import Dict, List
 
 GB = 1024**3
 
@@ -31,7 +30,7 @@ PROFILES = [
 ]
 
 
-def build_records(host: str, day: dt.date, index: int, rng: random.Random) -> List[Dict[str, object]]:
+def build_records(host: str, day: dt.date, index: int, rng: random.Random) -> list[dict[str, object]]:
     records = []
     for position, (mount, size_gb, fill, profile) in enumerate(PROFILES):
         total = size_gb * GB
@@ -88,7 +87,7 @@ def main() -> int:
 
     for index in range(args.days):
         day = today - dt.timedelta(days=args.days - 1 - index)
-        records: List[Dict[str, object]] = []
+        records: list[dict[str, object]] = []
         for host in hosts:
             records.extend(build_records(host, day, index, rng))
         (daily_dir / f"{day.isoformat()}.json").write_text(json.dumps(records, indent=2), encoding="utf-8")

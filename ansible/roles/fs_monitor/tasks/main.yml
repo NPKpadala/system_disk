@@ -95,4 +95,8 @@
   ansible.builtin.command:
     cmd: "{{ fs_monitor_bin_path }} {{ fs_monitor_collect_args }}"
     creates: "{{ fs_monitor_data_dir }}/state.json"
-  changed_when: true
+  register: fs_monitor_seed
+  # The creates guard already stops the collector re-running once a baseline
+  # exists; report a change only when it actually ran, so a second converge is
+  # honestly changed=0 rather than merely quiet about it.
+  changed_when: fs_monitor_seed.start | default(none) is not none

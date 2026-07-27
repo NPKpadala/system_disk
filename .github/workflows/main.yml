@@ -65,7 +65,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Ruff
-        run: ruff check --line-length 120 .
+        run: ruff check .
 
       - name: Ansible lint
         run: ansible-lint ansible/
@@ -92,18 +92,25 @@ jobs:
       - name: Converge
         working-directory: ansible
         run: |
+          # The runner's only real filesystem is /, which the collector excludes
+          # by default. Include it explicitly so the roll-up gets real rows.
           printf '[ci]\nlocalhost ansible_connection=local\n' > inventory.ini
+          printf 'fs_monitor_include_mounts: ["/"]\n' > group_vars/ci.yml
           ansible-playbook site.yml
 
       - name: Idempotence check
         working-directory: ansible
         run: |
           ansible-playbook site.yml | tee converge.log
-          grep -q 'changed=0' converge.log
+          # A second converge must report no changes and no failures on the same line.
+          grep -q 'changed=0.*failed=0' converge.log
 
       - name: Fleet roll-up
         working-directory: ansible
-        run: ansible-playbook collect.yml -e run_collect=true -e fs_monitor_min_days=1
+        run: |
+          ansible-playbook collect.yml -e run_collect=true -e fs_monitor_min_days=1
+          test -s reports/FLEET.md
+          grep -q 'Fleet storage report' reports/FLEET.md
 
       - name: Uninstall cleanly
         working-directory: ansible
