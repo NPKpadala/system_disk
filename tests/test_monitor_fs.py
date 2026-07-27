@@ -374,6 +374,23 @@ class FleetReportTests(unittest.TestCase):
         self.assertEqual(payload["totals"]["filesystems"], 1)
         self.assertAlmostEqual(payload["totals"]["monthly_saving"], 10.0)
 
+    def test_empty_fleet_is_reported_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reports = Path(tmp) / "reports"
+            reports.mkdir()
+            # A host whose storage is entirely excluded reports zero filesystems.
+            (reports / "host-a.json").write_text(
+                json.dumps({"totals": monitor_fs.totals([]), "filesystems": []}),
+                encoding="utf-8",
+            )
+            markdown = reports / "FLEET.md"
+            code = fleet_report.main([str(reports), "--markdown", str(markdown), "--quiet"])
+            text = markdown.read_text(encoding="utf-8")
+
+        self.assertEqual(code, 0)
+        self.assertIn("Fleet storage report", text)
+        self.assertIn("Nothing to reclaim", text)
+
 
 if __name__ == "__main__":
     unittest.main()

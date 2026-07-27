@@ -202,8 +202,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     rows = load_reports(paths)
     if not rows:
-        print("error: reports contained no filesystem rows", file=sys.stderr)
-        return 1
+        # A fleet where every host's storage is excluded, or that has not built
+        # up history yet, is a legitimate state - report it and still produce
+        # the artifacts downstream jobs expect, rather than failing the run.
+        print(
+            f"warning: {len(paths)} report(s) contained no filesystem rows - "
+            "nothing is being monitored yet",
+            file=sys.stderr,
+        )
 
     rows.sort(key=lambda row: -float(row.get("monthly_saving", 0) or 0))
     hosts = by_host(rows)
