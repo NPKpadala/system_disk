@@ -1,0 +1,6 @@
+# Control-node / CI tooling only.
+# The collector that runs on monitored hosts uses the Python 3 standard library
+# and nothing else - that is deliberate, so it can be dropped onto any Linux box.
+ansible-core>=2.14
+ansible-lint>=6.20
+ruff>=0.4

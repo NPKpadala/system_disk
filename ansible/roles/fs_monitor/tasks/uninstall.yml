@@ -1,0 +1,40 @@
+---
+# Complete removal. Collected history is kept unless fs_monitor_purge_data=true,
+# because the history is the evidence behind every decommission decision.
+
+- name: Stop and disable the timer
+  when: ansible_facts['service_mgr'] == 'systemd'
+  ansible.builtin.systemd_service:
+    name: fs-monitor.timer
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Remove systemd units
+  when: ansible_facts['service_mgr'] == 'systemd'
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}"
+    state: absent
+  loop:
+    - fs-monitor.timer
+    - fs-monitor.service
+  notify: Reload systemd
+
+- name: Remove cron entry
+  when: ansible_facts['service_mgr'] != 'systemd'
+  ansible.builtin.cron:
+    name: fs-monitor daily collection
+    cron_file: fs-monitor
+    user: "{{ fs_monitor_owner }}"
+    state: absent
+
+- name: Remove collector
+  ansible.builtin.file:
+    path: "{{ fs_monitor_bin_path }}"
+    state: absent
+
+- name: Remove collected data
+  when: fs_monitor_purge_data | default(false) | bool
+  ansible.builtin.file:
+    path: "{{ fs_monitor_data_dir }}"
+    state: absent

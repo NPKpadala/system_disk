@@ -1,0 +1,15 @@
+{{ ansible_managed | comment }}
+[Unit]
+Description=Daily filesystem activity collection
+
+[Timer]
+OnCalendar={{ fs_monitor_schedule }}
+# Spread the fleet out so N hosts do not all read /proc at the same second.
+RandomizedDelaySec={{ fs_monitor_randomized_delay_sec }}
+# Catch up after downtime instead of silently losing a day of history.
+Persistent=true
+AccuracySec=1min
+Unit=fs-monitor.service
+
+[Install]
+WantedBy=timers.target

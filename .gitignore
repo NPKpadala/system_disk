@@ -1,0 +1,20 @@
+# Generated data and reports
+demo/
+local-data/
+ci-data/
+ansible/reports/
+ansible/*.log
+
+# Real inventories may contain hostnames and users - keep them out of git
+ansible/inventory.ini
+ansible/inventory.yml
+ansible/host_vars/
+ansible/*.retry
+
+# Python
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.venv/
+venv/

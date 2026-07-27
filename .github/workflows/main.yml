@@ -1,1 +1,110 @@
+name: CI
 
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  schedule:
+    # Weekly run so bit-rot in the toolchain shows up before a deploy does.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Spread across the interpreters shipped by the distributions this is
+        # meant to run on, because the collector has to work with whatever
+        # Python the fleet already has.
+        python-version: ["3.9", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Smoke test the CLI on this runner
+        run: |
+          python monitor_fs.py --data-dir ./ci-data collect --no-renice
+          python monitor_fs.py --data-dir ./ci-data report --days 30
+
+      - name: End-to-end demo fleet
+        run: |
+          python tools/demo_data.py --out ./demo --hosts 4 --days 30
+          python monitor_fs.py --data-dir ./demo report --days 30 --json ./demo/report.json
+          python fleet_report.py ./demo/report.json --markdown ./demo/FLEET.md
+
+      - name: Publish the demo report
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-fleet-report
+          path: demo/FLEET.md
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff
+        run: ruff check --line-length 120 .
+
+      - name: Ansible lint
+        run: ansible-lint ansible/
+
+      - name: Playbook syntax check
+        working-directory: ansible
+        run: |
+          ansible-playbook site.yml collect.yml uninstall.yml \
+            -i inventory.example.ini --syntax-check
+
+  converge:
+    name: Deploy, roll up, uninstall
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: pip install -r requirements-dev.txt
+
+      - name: Converge
+        working-directory: ansible
+        run: |
+          printf '[ci]\nlocalhost ansible_connection=local\n' > inventory.ini
+          ansible-playbook site.yml
+
+      - name: Idempotence check
+        working-directory: ansible
+        run: |
+          ansible-playbook site.yml | tee converge.log
+          grep -q 'changed=0' converge.log
+
+      - name: Fleet roll-up
+        working-directory: ansible
+        run: ansible-playbook collect.yml -e run_collect=true -e fs_monitor_min_days=1
+
+      - name: Uninstall cleanly
+        working-directory: ansible
+        run: ansible-playbook uninstall.yml -e fs_monitor_purge_data=true

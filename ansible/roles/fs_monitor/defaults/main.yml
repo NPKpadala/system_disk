@@ -1,0 +1,52 @@
+---
+# Where the collector and its data live on each target host.
+fs_monitor_bin_dir: /usr/local/bin
+fs_monitor_bin_name: monitor-fs
+fs_monitor_data_dir: /var/log/fs_monitor
+fs_monitor_owner: root
+fs_monitor_group: root
+
+# Schedule. systemd timers are used when available, cron otherwise. Set to
+# false on hosts where an external scheduler (Rundeck, Control-M, a container
+# orchestrator) already owns cron-like work.
+fs_monitor_manage_schedule: true
+
+fs_monitor_schedule: "*-*-* 02:17:00"      # systemd OnCalendar - daily, off-peak
+fs_monitor_cron_hour: "2"
+fs_monitor_cron_minute: "17"
+fs_monitor_randomized_delay_sec: 1800      # spread the fleet over 30 minutes
+
+# Overhead controls. The collector is meant to be invisible on a busy box.
+fs_monitor_nice: 10                        # CPU priority (also sets I/O class idle)
+fs_monitor_cpu_quota: "5%"                 # systemd hard ceiling on CPU
+fs_monitor_memory_max: "128M"              # systemd hard ceiling on RSS
+fs_monitor_timeout_sec: 300                # kill a run that somehow hangs
+fs_monitor_skip_open_files: false          # true = cheapest possible collection
+
+# What to watch.
+fs_monitor_include_mounts: []              # non-empty = watch only these
+fs_monitor_exclude_mounts: []              # added to the built-in safe list
+fs_monitor_exclude_types: []
+fs_monitor_activity_threshold_sectors: 2048   # 1 MiB of I/O per day counts as "in use"
+fs_monitor_retention_days: 400
+
+# Reporting and cost model.
+fs_monitor_report_days: 30
+fs_monitor_min_days: 7
+fs_monitor_cost_per_gb_month: 0.08
+fs_monitor_currency: USD
+fs_monitor_shrink_below_percent: 40
+fs_monitor_headroom_percent: 30
+fs_monitor_min_saving_gb: 1
+
+# Seed a baseline reading immediately after install so day one is not wasted.
+fs_monitor_seed_baseline: true
+
+# Scratch path used when a report is generated and fetched.
+fs_monitor_report_tmp: /tmp/fs-monitor-report.json
+
+# Keep collected history when uninstalling; it is the evidence trail.
+fs_monitor_purge_data: false
+
+# Where fetched reports land on the control node (also set in group_vars).
+fs_monitor_fleet_report_dir: "{{ playbook_dir }}/../reports"
