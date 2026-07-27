@@ -99,7 +99,8 @@ jobs:
         working-directory: ansible
         run: |
           ansible-playbook site.yml | tee converge.log
-          grep -q 'changed=0' converge.log
+          # A second converge must report no changes and no failures on the same line.
+          grep -q 'changed=0.*failed=0' converge.log
 
       - name: Fleet roll-up
         working-directory: ansible
